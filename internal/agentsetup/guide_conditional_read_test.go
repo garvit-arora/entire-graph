@@ -31,7 +31,7 @@ func TestEveryGuideScopesCompletenessToObservedSource(t *testing.T) {
 				"[complete] certifies a structurally whole displayed body",
 				"unchanged by rendering, for the source view observed by that query",
 				"does not certify dependencies, later source freshness, or task resolution",
-				"Do not reread the same unchanged span merely to duplicate it",
+				"Reuse that span without another read only when current session",
 			} {
 				if !strings.Contains(guide, required) {
 					t.Errorf("rendered guide missing observed-source boundary %q", required)

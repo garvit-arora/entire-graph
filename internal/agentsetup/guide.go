@@ -89,7 +89,8 @@ question through it. Do not automatically install, configure, or repair tools.
 const verificationGuide = `Inspect the source Graph displays at useful locations before editing. A result marked [complete]
 certifies a structurally whole displayed body, unchanged by rendering, for the source
 view observed by that query. It does not certify dependencies, later source freshness,
-or task resolution. Do not reread the same unchanged span merely to duplicate it.
+or task resolution. Reuse that span without another read only when current session
+evidence establishes its freshness and your editing tool does not require a prior Read.
 An unmarked result is not certified: it may be a partial window or a whole body whose
 marker did not fit. Retrieve only the specific additional span, surrounding context,
 caller, contract, or second site required for the task. If edits, formatting, generation,
