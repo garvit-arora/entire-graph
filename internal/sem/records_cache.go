@@ -75,14 +75,14 @@ type cachedProviderRecords struct {
 // store overwrites the other's and neither ever gets a warm cache. Validating
 // the schema after opening a schema-independent entry catches the wrong answer
 // but cannot stop the mutual eviction that produced it.
-func providerRecordsKey(absRepo, repositoryKey, providerVersion, commit, tree, mode string, options ProviderSnapshotOptions) (string, error) {
-	return providerRecordsKeyForSchema(SchemaVersion, absRepo, repositoryKey, providerVersion, commit, tree, mode, options)
+func providerRecordsKey(absRepo, repositoryKey, providerVersion, commit, tree, mode string, options ProviderSnapshotOptions, contexts ...context.Context) (string, error) {
+	return providerRecordsKeyForSchema(SchemaVersion, absRepo, repositoryKey, providerVersion, commit, tree, mode, options, contexts...)
 }
 
 // providerRecordsKeyForSchema takes the schema version explicitly so a test can
 // address the entry a build at another schema would have written. Production
 // reaches it only through providerRecordsKey, which supplies SchemaVersion.
-func providerRecordsKeyForSchema(schemaVersion, absRepo, repositoryKey, providerVersion, commit, tree, mode string, options ProviderSnapshotOptions) (string, error) {
+func providerRecordsKeyForSchema(schemaVersion, absRepo, repositoryKey, providerVersion, commit, tree, mode string, options ProviderSnapshotOptions, contexts ...context.Context) (string, error) {
 	policy, err := cachePolicyForOptions(absRepo, options)
 	if err != nil {
 		return "", err
@@ -110,7 +110,7 @@ func providerRecordsKeyForSchema(schemaVersion, absRepo, repositoryKey, provider
 	// Path-free is not scope-free: a `--repo <subdir>` stream lists only that
 	// subtree, with subdir-relative paths, at the same commit and tree as the
 	// root's. See the "repository-scope" term in searchSnapshotKeyForSchema.
-	writeCacheKeyString(hash, "repository-scope", cacheCheckoutScope(absRepo))
+	writeCacheKeyString(hash, "repository-scope", cacheCheckoutScope(absRepo, contexts...))
 	writeCacheKeyString(hash, "provider-version", providerVersion)
 	writeCacheKeyString(hash, "commit", commit)
 	writeCacheKeyString(hash, "tree", tree)
@@ -134,6 +134,7 @@ func providerRecordsKeyForSchema(schemaVersion, absRepo, repositoryKey, provider
 // ProviderRecordsCacheTransaction pins the cache key and immutable ignore
 // policy used by one record-stream lookup/build/store cycle.
 type ProviderRecordsCacheTransaction struct {
+	ctx             context.Context
 	enabled         bool
 	entry           cacheEntry
 	absRepo         string
@@ -150,6 +151,7 @@ type ProviderRecordsCacheTransaction struct {
 // Callers must build records with Options before calling Store.
 func BeginProviderRecordsCache(ctx context.Context, repo, providerVersion, commit, tree, mode, cacheDir string, options ProviderSnapshotOptions) (*ProviderRecordsCacheTransaction, error) {
 	transaction := &ProviderRecordsCacheTransaction{
+		ctx:             ctx,
 		providerVersion: providerVersion,
 		commit:          commit,
 		tree:            tree,
@@ -177,6 +179,7 @@ func BeginProviderRecordsCache(ctx context.Context, repo, providerVersion, commi
 		tree,
 		mode,
 		transaction.options,
+		ctx,
 	)
 	if err != nil {
 		return nil, err
@@ -216,7 +219,7 @@ func (transaction *ProviderRecordsCacheTransaction) Load() ([]byte, *SnapshotSum
 	}
 	// Restamp only between checkouts of the same scope (see cachedProviderRecords.RepoScope);
 	// the same root is the same checkout, so the scope lookup is paid only on a cross-checkout hit.
-	if cache.RepoRoot != transaction.absRepo && cache.RepoScope != cacheCheckoutScope(transaction.absRepo) {
+	if cache.RepoRoot != transaction.absRepo && cache.RepoScope != cacheCheckoutScope(transaction.absRepo, transaction.ctx) {
 		return nil, nil, false
 	}
 	records, ok := restampProviderRecordsRepoRoot(cache.Records, cache.RepoRoot, transaction.absRepo)
@@ -300,7 +303,7 @@ func (transaction *ProviderRecordsCacheTransaction) Store(records []byte, summar
 		Profile:         transaction.options.Profile,
 		MaxParseBytes:   transaction.options.MaxParseBytes,
 		RepoRoot:        transaction.absRepo,
-		RepoScope:       cacheCheckoutScope(transaction.absRepo),
+		RepoScope:       cacheCheckoutScope(transaction.absRepo, transaction.ctx),
 		Records:         records,
 		Summary:         summary,
 	}
