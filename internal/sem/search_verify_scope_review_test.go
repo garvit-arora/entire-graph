@@ -55,3 +55,28 @@ func TestVerifyAboveScopeUsesPhysicalRootForSymlinkedScope(t *testing.T) {
 		t.Fatalf("cd root=%q, want %q", above.up, physical)
 	}
 }
+
+func TestVerifyAboveScopeAcceptsRelativeRepo(t *testing.T) {
+	repo := t.TempDir()
+	scope := filepath.Join(repo, "sub", "pkg")
+	if err := os.MkdirAll(scope, 0755); err != nil {
+		t.Fatal(err)
+	}
+	git(t, repo, "init")
+	write(t, repo, "go.mod", "module example.com/test\n")
+	physical, err := filepath.EvalSymlinks(repo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(filepath.Join(repo, "sub"))
+	for _, relative := range []string{".", "pkg"} {
+		above, close, ok := openSearchVerifyAboveScope(t.Context(), relative, "", false)
+		if !ok {
+			t.Fatalf("relative scope %q refused", relative)
+		}
+		close()
+		if above.up != physical {
+			t.Fatalf("cd root=%q, want %q", above.up, physical)
+		}
+	}
+}

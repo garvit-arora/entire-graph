@@ -86,7 +86,11 @@ func openSearchVerifyAboveScope(ctx context.Context, repo, commit string, useHea
 	}
 	// A Git core.worktree override must not move verification outside the
 	// nearest physical checkout marker that encloses the selected scope.
-	physical, err := filepath.EvalSymlinks(repo)
+	absolute, err := filepath.Abs(repo)
+	if err != nil {
+		return searchVerifyAboveScope{}, nil, false
+	}
+	physical, err := filepath.EvalSymlinks(absolute)
 	if err != nil {
 		return searchVerifyAboveScope{}, nil, false
 	}
