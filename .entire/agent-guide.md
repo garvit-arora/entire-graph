@@ -41,6 +41,8 @@ certifies a structurally whole displayed body, unchanged by rendering, for the s
 view observed by that query. It does not certify dependencies, later source freshness,
 or task resolution. Reuse that span without another read only when current session
 evidence establishes its freshness and your editing tool does not require a prior Read.
+If you cannot establish that a span is unchanged since the query, treat it as changed
+and read it.
 An unmarked result is not certified: it may be a partial window or a whole body whose
 marker did not fit. Retrieve only the specific additional span, surrounding context,
 caller, contract, or second site required for the task. If edits, formatting, generation,

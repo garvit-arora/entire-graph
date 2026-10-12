@@ -58,12 +58,11 @@ var brainReference string
 // BenchmarkNeutralGraphCapability states what Graph can do without telling the agent
 // what to do first. It exists so an A/B harness that must avoid arm-asymmetric
 // instructions has somewhere to take its wording FROM, instead of editing the guides
-// below. It is never part of GraphGuide, CombinedGuide, or BrainGuide. It names
-// --format agent for the cost reason above, not as an instruction: a capability
-// statement may say how the tool is invoked without telling an arm what to do.
+// below. It is never part of GraphGuide, CombinedGuide, or BrainGuide. The
+// benchmark harness selects its output format explicitly for each experiment.
 const BenchmarkNeutralGraphCapability = `Graph answers code-discovery, structural, and semantic-change questions:
 
-    entire graph query --repo . --profile full --format agent --query "<task>"
+    entire graph query --repo . --profile full --query "<task>"
 
 query, def, neighbors, and impact locate code and report structure. diff, commit, and
 checkpoint compare revisions. Graph interactive queries normally inspect the working
@@ -91,6 +90,8 @@ certifies a structurally whole displayed body, unchanged by rendering, for the s
 view observed by that query. It does not certify dependencies, later source freshness,
 or task resolution. Reuse that span without another read only when current session
 evidence establishes its freshness and your editing tool does not require a prior Read.
+If you cannot establish that a span is unchanged since the query, treat it as changed
+and read it.
 An unmarked result is not certified: it may be a partial window or a whole body whose
 marker did not fit. Retrieve only the specific additional span, surrounding context,
 caller, contract, or second site required for the task. If edits, formatting, generation,
