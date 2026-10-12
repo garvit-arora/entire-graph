@@ -84,9 +84,30 @@ func openSearchVerifyAboveScope(ctx context.Context, repo, commit string, useHea
 	if err != nil || toplevel == "" {
 		return searchVerifyAboveScope{}, nil, false
 	}
+	// A Git core.worktree override must not move verification outside the
+	// nearest physical checkout marker that encloses the selected scope.
+	physical, err := filepath.EvalSymlinks(repo)
+	if err != nil {
+		return searchVerifyAboveScope{}, nil, false
+	}
+	boundary := physical
+	for depth := 0; depth <= searchVerifyMaxDepth; depth++ {
+		if _, err := os.Lstat(filepath.Join(boundary, ".git")); err == nil {
+			break
+		}
+		parent := filepath.Dir(boundary)
+		if parent == boundary {
+			return searchVerifyAboveScope{}, nil, false
+		}
+		boundary = parent
+	}
+	physicalTop, err := filepath.EvalSymlinks(toplevel)
+	if err != nil || boundary != physicalTop {
+		return searchVerifyAboveScope{}, nil, false
+	}
 	scope := searchVerifyAboveScope{
 		prefix: prefix,
-		up:     strings.TrimSuffix(strings.Repeat("../", strings.Count(prefix, "/")+1), "/"),
+		up:     physicalTop,
 	}
 	if useHead {
 		// The committed tree, like every other read this query makes: a --head answer must not
@@ -118,11 +139,15 @@ func openSearchVerifyAboveScope(ctx context.Context, repo, commit string, useHea
 		if err != nil || !info.Mode().IsRegular() || info.Size() > defaultMaxParseBytes {
 			return "", false
 		}
-		file, err := root.Open(name)
+		file, err := openSearchVerifyRegularFile(root, name)
 		if err != nil {
 			return "", false
 		}
 		defer file.Close()
+		opened, err := file.Stat()
+		if err != nil || !opened.Mode().IsRegular() || !os.SameFile(info, opened) {
+			return "", false
+		}
 		content, err := io.ReadAll(io.LimitReader(file, defaultMaxParseBytes+1))
 		if err != nil || len(content) > defaultMaxParseBytes {
 			return "", false

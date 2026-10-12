@@ -1128,12 +1128,8 @@ func LoadOrBuildProviderSnapshot(
 // entry can reuse it (e.g. --allow-empty commits, amends, rebases that don't
 // touch content). Commit is provenance metadata carried on the cached value
 // and re-stamped to the serving HEAD on load; it never influences the key.
-// This is scoped to the parsed graph itself: a full-profile snapshot also
-// embeds FILE_CHANGES_WITH co-change relations derived by walking recent git
-// history (see fileChangesWithRelations), so a same-tree hit after a rebase
-// can serve co-change edges computed against the prior history. That is
-// accepted because those edges are heuristic and confidence-scored, not
-// exact facts about the tree.
+// History-derived FILE_CHANGES_WITH edges are refreshed on each full-profile
+// cache load against the serving checkout, rather than reused across histories.
 // searchSnapshotKey addresses an entry for the schema THIS build serializes
 // under; searchSnapshotKeyForSchema carries the reasoning.
 func searchSnapshotKey(absRepo, repositoryKey, providerVersion, tree string, options ProviderSnapshotOptions, contexts ...context.Context) (string, error) {
@@ -1331,7 +1327,38 @@ func loadCachedSearchSnapshot(
 	// The cache key is tree-only: a hit may have been built for a different
 	// commit that shares this tree. The parsed graph is exactly correct, but
 	// commit provenance must reflect the HEAD we are serving right now.
-	return restampCachedSearchSnapshotCommit(cached, commit), true
+	cached = restampCachedSearchSnapshotCommit(cached, commit)
+	if options.Profile == ProfileFull {
+		ctx := context.Background()
+		if len(contexts) > 0 && contexts[0] != nil {
+			ctx = contexts[0]
+		}
+		refreshed := make([]RelationRecord, 0, len(cached.Snapshot.Relations))
+		for _, relation := range cached.Snapshot.Relations {
+			if relation.Type != "FILE_CHANGES_WITH" {
+				refreshed = append(refreshed, relation)
+			}
+		}
+		history := fileChangesWithRelations(ctx, absRepo, commit, repositoryKey, cached.Snapshot.Files)
+		refreshed = append(refreshed, history...)
+		sort.Slice(refreshed, func(i, j int) bool {
+			left, right := refreshed[i], refreshed[j]
+			return left.Type+left.FromID+left.ToID < right.Type+right.FromID+right.ToID
+		})
+		cached.Snapshot.Relations = refreshed
+		cached.Snapshot.Header.Stats.Relations = len(refreshed)
+		counts := make(map[string]int, len(cached.Snapshot.Header.Completeness.Relations))
+		for kind, count := range cached.Snapshot.Header.Completeness.Relations {
+			if kind != "FILE_CHANGES_WITH" {
+				counts[kind] = count
+			}
+		}
+		if len(history) > 0 {
+			counts["FILE_CHANGES_WITH"] = len(history)
+		}
+		cached.Snapshot.Header.Completeness.Relations = counts
+	}
+	return cached, true
 }
 
 // rebindCachedSearchSnapshot adopts an entry, which may have been written from
