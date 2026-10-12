@@ -208,7 +208,7 @@ func loadCachedCompleteSearchSnapshotBinding(
 	if fullOptions.Profile == "" {
 		fullOptions.Profile = ProfileFull
 	}
-	fullKey, keyErr := searchSnapshotKey(absRepo, repositoryKey, providerVersion, tree, fullOptions)
+	fullKey, keyErr := searchSnapshotKey(absRepo, repositoryKey, providerVersion, tree, fullOptions, ctx)
 	if keyErr != nil {
 		return preloadedCompleteSnapshot{}, false, keyErr
 	}
@@ -222,7 +222,7 @@ func loadCachedCompleteSearchSnapshotBinding(
 	if entryErr != nil {
 		return preloadedCompleteSnapshot{}, false, entryErr
 	}
-	cached, ok := loadCachedSearchSnapshot(fullEntry, absRepo, commit, repositoryKey, providerVersion, tree, fullOptions)
+	cached, ok := loadCachedSearchSnapshot(fullEntry, absRepo, commit, repositoryKey, providerVersion, tree, fullOptions, ctx)
 	if !ok {
 		return preloadedCompleteSnapshot{}, false, nil
 	}
@@ -304,7 +304,7 @@ func loadOrBuildSearchSnapshotPersisting(
 	// had asked to be rid of.
 	completeOptions := options
 	completeOptions.OnlyFiles = nil
-	completeKey, err := searchSnapshotKey(absRepo, repositoryKey, providerVersion, tree, completeOptions)
+	completeKey, err := searchSnapshotKey(absRepo, repositoryKey, providerVersion, tree, completeOptions, ctx)
 	if err != nil {
 		return ProviderSnapshot{}, false, err
 	}
@@ -338,7 +338,7 @@ func loadOrBuildSearchSnapshotPersisting(
 			generationKnown = false
 		}
 		derivedFrom = generation
-		key, err = searchSnapshotKey(absRepo, repositoryKey, providerVersion, tree, options)
+		key, err = searchSnapshotKey(absRepo, repositoryKey, providerVersion, tree, options, ctx)
 		if err != nil {
 			return ProviderSnapshot{}, false, err
 		}
@@ -348,7 +348,7 @@ func loadOrBuildSearchSnapshotPersisting(
 		}
 	}
 	if generationKnown {
-		if cached, ok := loadCachedSearchSnapshot(entry, absRepo, commit, repositoryKey, providerVersion, tree, options); ok &&
+		if cached, ok := loadCachedSearchSnapshot(entry, absRepo, commit, repositoryKey, providerVersion, tree, options, ctx); ok &&
 			cached.DerivedFrom == derivedFrom {
 			return cached.Snapshot, true, nil
 		}
@@ -374,7 +374,7 @@ func loadOrBuildSearchSnapshotPersisting(
 			// Persisting the exact selective view makes repeated identical queries
 			// a direct cache hit. As with ordinary search caching, this is best effort.
 			if generationKnown {
-				_ = writeSearchSnapshot(entry, newCachedSearchSnapshotFrom(providerVersion, commit, tree, derivedFrom, options, selective))
+				_ = writeSearchSnapshot(entry, newCachedSearchSnapshotFrom(providerVersion, commit, tree, derivedFrom, options, selective, ctx))
 			}
 			return selective, true
 		}
@@ -401,7 +401,7 @@ func loadOrBuildSearchSnapshotPersisting(
 		if entryErr != nil {
 			return ProviderSnapshot{}, false, entryErr
 		}
-		if cached, ok := loadCachedSearchSnapshot(fullEntry, absRepo, commit, repositoryKey, providerVersion, tree, completeOptions); ok {
+		if cached, ok := loadCachedSearchSnapshot(fullEntry, absRepo, commit, repositoryKey, providerVersion, tree, completeOptions, ctx); ok {
 			if selective, ok := deriveFromFull(cached.Snapshot); ok {
 				return selective, true, nil
 			}
@@ -436,7 +436,7 @@ func loadOrBuildSearchSnapshotPersisting(
 					return ProviderSnapshot{}, false, true, lockErr
 				}
 				defer lock.release()
-				if cached, ok := loadCachedSearchSnapshot(fullEntry, absRepo, commit, repositoryKey, providerVersion, tree, completeOptions); ok {
+				if cached, ok := loadCachedSearchSnapshot(fullEntry, absRepo, commit, repositoryKey, providerVersion, tree, completeOptions, ctx); ok {
 					if selective, ok := deriveFromFull(cached.Snapshot); ok {
 						return selective, true, true, nil
 					}
@@ -452,7 +452,7 @@ func loadOrBuildSearchSnapshotPersisting(
 					full.Header.Commit = commit
 					// Best effort, like every query-time store: an unwritable cache
 					// still serves this query from the snapshot in memory.
-					_ = writeSearchSnapshot(fullEntry, newCachedSearchSnapshot(providerVersion, commit, tree, completeOptions, full))
+					_ = writeSearchSnapshot(fullEntry, newCachedSearchSnapshot(providerVersion, commit, tree, completeOptions, full, ctx))
 					if selective, ok := deriveFromFull(full); ok {
 						return selective, false, true, nil
 					}
@@ -473,7 +473,7 @@ func loadOrBuildSearchSnapshotPersisting(
 			return ProviderSnapshot{}, false, lockErr
 		}
 		defer lock.release()
-		if cached, ok := loadCachedSearchSnapshot(entry, absRepo, commit, repositoryKey, providerVersion, tree, options); ok &&
+		if cached, ok := loadCachedSearchSnapshot(entry, absRepo, commit, repositoryKey, providerVersion, tree, options, ctx); ok &&
 			cached.DerivedFrom == derivedFrom {
 			return cached.Snapshot, true, nil
 		}
@@ -499,7 +499,7 @@ func loadOrBuildSearchSnapshotPersisting(
 	// Cache persistence is best effort. Retrieval correctness never depends on
 	// a writable cache directory.
 	if generationKnown && persistBuilt {
-		_ = writeSearchSnapshot(entry, newCachedSearchSnapshotFrom(providerVersion, commit, tree, derivedFrom, options, snapshot))
+		_ = writeSearchSnapshot(entry, newCachedSearchSnapshotFrom(providerVersion, commit, tree, derivedFrom, options, snapshot, ctx))
 	}
 	return snapshot, false, nil
 }
@@ -634,7 +634,7 @@ func preindexProviderSnapshotWithPersistenceVerifier(
 	// command promises a durable artifact: persist it here with any error
 	// surfaced, then prove the entry a later query will open holds exactly those
 	// bytes.
-	key, err := searchSnapshotKey(absRepo, repositoryKey, providerVersion, tree, options)
+	key, err := searchSnapshotKey(absRepo, repositoryKey, providerVersion, tree, options, ctx)
 	if err != nil {
 		return ProviderSnapshot{}, false, err
 	}
@@ -642,7 +642,7 @@ func preindexProviderSnapshotWithPersistenceVerifier(
 	if err != nil {
 		return ProviderSnapshot{}, false, err
 	}
-	cache := newCachedSearchSnapshot(providerVersion, commit, tree, options, snapshot)
+	cache := newCachedSearchSnapshot(providerVersion, commit, tree, options, snapshot, ctx)
 	if err := persistVerifiedSearchSnapshot(entry, cache, readPersistedDigest); err != nil {
 		return ProviderSnapshot{}, false, fmt.Errorf("persist preindex snapshot: %w", err)
 	}
@@ -741,11 +741,11 @@ func validateBuiltSearchSnapshot(
 	return nil
 }
 
-func newCachedSearchSnapshot(providerVersion, commit, tree string, options ProviderSnapshotOptions, snapshot ProviderSnapshot) cachedSearchSnapshot {
-	return newCachedSearchSnapshotFrom(providerVersion, commit, tree, "", options, snapshot)
+func newCachedSearchSnapshot(providerVersion, commit, tree string, options ProviderSnapshotOptions, snapshot ProviderSnapshot, contexts ...context.Context) cachedSearchSnapshot {
+	return newCachedSearchSnapshotFrom(providerVersion, commit, tree, "", options, snapshot, contexts...)
 }
 
-func newCachedSearchSnapshotFrom(providerVersion, commit, tree, derivedFrom string, options ProviderSnapshotOptions, snapshot ProviderSnapshot) cachedSearchSnapshot {
+func newCachedSearchSnapshotFrom(providerVersion, commit, tree, derivedFrom string, options ProviderSnapshotOptions, snapshot ProviderSnapshot, contexts ...context.Context) cachedSearchSnapshot {
 	cache := cachedSearchSnapshot{
 		DerivedFrom:     derivedFrom,
 		CacheVersion:    searchSnapshotCacheVersion,
@@ -755,7 +755,7 @@ func newCachedSearchSnapshotFrom(providerVersion, commit, tree, derivedFrom stri
 		Profile:         options.Profile,
 		MaxParseBytes:   options.MaxParseBytes,
 		Worktree:        options.Worktree,
-		RepoScope:       cacheCheckoutScope(snapshot.Header.RepoRoot),
+		RepoScope:       cacheCheckoutScope(snapshot.Header.RepoRoot, contexts...),
 		Snapshot:        snapshot,
 	}
 	for key := range snapshot.unmergedDataFlowEdges {
@@ -1133,8 +1133,8 @@ func LoadOrBuildProviderSnapshot(
 // exact facts about the tree.
 // searchSnapshotKey addresses an entry for the schema THIS build serializes
 // under; searchSnapshotKeyForSchema carries the reasoning.
-func searchSnapshotKey(absRepo, repositoryKey, providerVersion, tree string, options ProviderSnapshotOptions) (string, error) {
-	return searchSnapshotKeyForSchema(SchemaVersion, absRepo, repositoryKey, providerVersion, tree, options)
+func searchSnapshotKey(absRepo, repositoryKey, providerVersion, tree string, options ProviderSnapshotOptions, contexts ...context.Context) (string, error) {
+	return searchSnapshotKeyForSchema(SchemaVersion, absRepo, repositoryKey, providerVersion, tree, options, contexts...)
 }
 
 // searchSnapshotKeyForSchema takes the schema version explicitly so a test can
@@ -1146,7 +1146,7 @@ func searchSnapshotKey(absRepo, repositoryKey, providerVersion, tree string, opt
 // one's store overwrites the other's and neither ever gets a warm cache. The
 // validity check catches the wrong answer; it cannot stop the mutual eviction
 // that produced it, because by then the entry has already been replaced.
-func searchSnapshotKeyForSchema(schemaVersion, absRepo, repositoryKey, providerVersion, tree string, options ProviderSnapshotOptions) (string, error) {
+func searchSnapshotKeyForSchema(schemaVersion, absRepo, repositoryKey, providerVersion, tree string, options ProviderSnapshotOptions, contexts ...context.Context) (string, error) {
 	if options.Worktree {
 		return "", errors.New("working-tree snapshots cannot have persistent cache keys")
 	}
@@ -1173,7 +1173,7 @@ func searchSnapshotKeyForSchema(schemaVersion, absRepo, repositoryKey, providerV
 	// each is served as the other: a root query after a subdir one reported a hit
 	// with none of the root's symbols. Two worktrees or clones at the same tree and
 	// the same prefix still share; that is what the path-free key is for.
-	writeCacheKeyString(hash, "repository-scope", cacheCheckoutScope(absRepo))
+	writeCacheKeyString(hash, "repository-scope", cacheCheckoutScope(absRepo, contexts...))
 	writeCacheKeyString(hash, "provider-version", providerVersion)
 	writeCacheKeyString(hash, "tree", tree)
 	writeCacheKeyString(hash, "profile", string(options.Profile))
@@ -1269,11 +1269,14 @@ func restampCachedSearchSnapshotCommit(cache cachedSearchSnapshot, commit string
 // cannot answer (or may not be run on this metadata), the term falls back to the
 // absolute path: that entry is then private to the directory, never shared with a
 // scope it might not match.
-func cacheCheckoutScope(absRepo string) string {
+func cacheCheckoutScope(absRepo string, contexts ...context.Context) string {
 	if absRepo == "" {
 		return "path:"
 	}
 	ctx := context.Background()
+	if len(contexts) > 0 && contexts[0] != nil {
+		ctx = contexts[0]
+	}
 	if gitMetadataSafeForSubprocessContext(ctx, absRepo) {
 		if prefix, err := gitutil.RepoPrefix(ctx, absRepo); err == nil {
 			return "prefix:" + filepath.ToSlash(prefix)
@@ -1304,6 +1307,8 @@ func loadCachedSearchSnapshot(
 	entry cacheEntry,
 	absRepo, commit, repositoryKey, providerVersion, tree string,
 	options ProviderSnapshotOptions,
+
+	contexts ...context.Context,
 ) (cachedSearchSnapshot, bool) {
 	cached, err := readSearchSnapshot(entry)
 	if err != nil {
@@ -1313,7 +1318,7 @@ func loadCachedSearchSnapshot(
 	// separates scopes; this keeps a hand-edited, colliding or pre-scope entry from
 	// being adopted by a checkout whose subtree it does not describe. Same root
 	// means same checkout, so the scope lookup is paid only on a cross-checkout hit.
-	if cached.Snapshot.Header.RepoRoot != absRepo && cached.RepoScope != cacheCheckoutScope(absRepo) {
+	if cached.Snapshot.Header.RepoRoot != absRepo && cached.RepoScope != cacheCheckoutScope(absRepo, contexts...) {
 		return cachedSearchSnapshot{}, false
 	}
 	cached = rebindCachedSearchSnapshot(cached, absRepo, repositoryKey)
