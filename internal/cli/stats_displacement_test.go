@@ -596,10 +596,13 @@ func TestGraphDeliveredSpans(t *testing.T) {
 func TestPathsOverlapIsWholeComponentSuffix(t *testing.T) {
 	t.Parallel()
 	named := graphOutputPaths("1. internal/cli/stats.go:770-790 F [complete]\ncalls fmt.Errorf and store.List at ./main.go:3\n")
-	for _, want := range []string{"internal/cli/stats.go", "main.go"} {
+	for _, want := range []string{"internal/cli/stats.go"} {
 		if !pathsOverlap(named, []string{want}) {
 			t.Errorf("named %v should contain %q", named, want)
 		}
+	}
+	if pathsOverlap(named, []string{"main.go"}) {
+		t.Fatalf("a source-body mention must not become a result-row path: %v", named)
 	}
 	for _, path := range named {
 		if strings.Contains(path, "Errorf") || strings.Contains(path, "List") {

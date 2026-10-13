@@ -260,6 +260,8 @@ var (
 	// graphLocatedPathPattern: a path token followed by ":<digit>", not glued to a preceding
 	// path character (RE2 has no lookbehind, so the boundary is consumed as group 0's prefix).
 	graphLocatedPathPattern = regexp.MustCompile(`(?:^|[^A-Za-z0-9_@+~./-])(` + graphPathToken + `):[0-9]`)
+	// Located tokens count only in renderer record rows, never ordinary source text.
+	graphLocatedRowPattern = regexp.MustCompile(`^(?:[ \t]*(?:[0-9]+\. )?` + graphPathToken + `:[0-9]|(?:Focus|Impact): .* \(` + graphPathToken + `:[0-9]|[-<>] .* \(` + graphPathToken + `:[0-9]|[ \t]+(?:owner|also declared|supertypes|implemented by|fields|nested|impl [^:]+): .*` + graphPathToken + `:[0-9])`)
 	// graphLinelessRowPattern: the two result-row forms that name a file without a line.
 	graphLinelessRowPattern = regexp.MustCompile(`^(?:- |CONTAINER MAP )(` + graphPathToken + `) \[`)
 	// graphSnippetLinePattern: a numbered source line inside a delivered window ("  4 | code",
@@ -455,6 +457,9 @@ func graphTextOutputPaths(text string) []string {
 		}
 		if match := graphLinelessRowPattern.FindStringSubmatch(line); match != nil {
 			paths = append(paths, match[1])
+		}
+		if !graphLocatedRowPattern.MatchString(line) {
+			continue
 		}
 		for _, match := range graphLocatedPathPattern.FindAllStringSubmatch(line, -1) {
 			paths = append(paths, match[1])
