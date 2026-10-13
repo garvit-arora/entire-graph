@@ -330,7 +330,7 @@ func plausibleGraphPath(path string) bool {
 
 // graphJSONResultKeys open the answer sections of query/search, neighbors, impact and def JSON.
 var graphJSONResultKeys = map[string]bool{
-	"results": true, "matches": true, "focus": true, "callers": true, "callees": true,
+	"results": true, "matches": true, "match_bodies": true, "definitions": true, "focus": true, "callers": true, "callees": true,
 	"type_consumers": true, "data_flows": true, "co_changes": true, "siblings": true, "declarations": true,
 }
 
@@ -425,6 +425,7 @@ func graphTextOutputPaths(text string) []string {
 	block := blockNone
 	var paths []string
 	seenSearchRow := false
+	emptySearchResponse := false
 	for _, line := range strings.Split(text, "\n") {
 		line = strings.TrimRight(line, "\r")
 		switch block {
@@ -440,6 +441,15 @@ func graphTextOutputPaths(text string) []string {
 		block = blockNone
 		if graphRankedRowPattern.MatchString(line) {
 			seenSearchRow = true
+			emptySearchResponse = false
+		} else if strings.HasPrefix(line, "Index:") || strings.HasPrefix(line, "Index not cached") {
+			// A chained invocation starts a new response; source-body text remains
+			// subject to the renderer's record quarantine.
+			seenSearchRow = false
+			emptySearchResponse = false
+		}
+		if emptySearchResponse {
+			continue
 		}
 		if strings.HasPrefix(strings.TrimSpace(line), "{") {
 			if seenSearchRow {
@@ -454,7 +464,10 @@ func graphTextOutputPaths(text string) []string {
 		}
 		switch {
 		case strings.TrimSpace(line) == graphNoResultsLine:
-			return nil
+			// This response located nothing, but an earlier chained response may
+			// already have named real hits. Keep those paths.
+			emptySearchResponse = true
+			continue
 		case strings.HasPrefix(line, "Coverage:") || strings.HasPrefix(line, "Completeness:"):
 			block = blockDiagnostics
 			continue
