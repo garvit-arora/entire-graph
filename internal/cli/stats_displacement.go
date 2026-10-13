@@ -264,6 +264,7 @@ var (
 	graphLocatedRowPattern = regexp.MustCompile(`^(?:[ \t]*(?:[0-9]+\. )?` + graphPathToken + `:[0-9]|(?:Focus|Impact): .* \(` + graphPathToken + `:[0-9]|[-<>] .* \(` + graphPathToken + `:[0-9]|[ \t]+(?:owner|also declared|supertypes|implemented by|fields|nested|impl [^:]+): .*` + graphPathToken + `:[0-9])`)
 	// graphLinelessRowPattern: the two result-row forms that name a file without a line.
 	graphLinelessRowPattern = regexp.MustCompile(`^(?:- |CONTAINER MAP )(` + graphPathToken + `) \[`)
+	graphRankedRowPattern   = regexp.MustCompile(`^[0-9]+\. ` + graphPathToken + `:[0-9]`)
 	// graphSnippetLinePattern: a numbered source line inside a delivered window ("  4 | code",
 	// "   6→ code"). Its text is repository content, not a row.
 	graphSnippetLinePattern = regexp.MustCompile(`^\s*[0-9]+\s*(?:\||→)`)
@@ -423,6 +424,7 @@ func graphTextOutputPaths(text string) []string {
 	)
 	block := blockNone
 	var paths []string
+	seenSearchRow := false
 	for _, line := range strings.Split(text, "\n") {
 		line = strings.TrimRight(line, "\r")
 		switch block {
@@ -436,7 +438,14 @@ func graphTextOutputPaths(text string) []string {
 			}
 		}
 		block = blockNone
+		if graphRankedRowPattern.MatchString(line) {
+			seenSearchRow = true
+		}
 		if strings.HasPrefix(strings.TrimSpace(line), "{") {
+			if seenSearchRow {
+				// A JSON-looking line in a search body is source, not another response.
+				continue
+			}
 			// A JSON response printed after other text (an echo header, a persisted-output
 			// preview) is one line: it gets the JSON rules, parsed or clipped.
 			linePaths, _ := graphJSONOutputPaths(line)

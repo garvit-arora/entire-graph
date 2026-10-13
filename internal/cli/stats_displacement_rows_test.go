@@ -49,6 +49,7 @@ func TestGraphOutputPathsReadsOnlyResultRows(t *testing.T) {
 		{"query-source-quoted-location-is-not-a-row", "1. internal/a/a.go:6 Foo\nfunc Foo() {\nlog.Printf(\"see docs/readme.md:12\")\n}\n", []string{a}},
 		{"source-location-without-row-is-ineligible", "log.Printf(\"see docs/readme.md:12\")\n", nil},
 		{"source-label-is-not-focus-record", "1. internal/a/a.go:6 Foo\nFocus: log.Printf(\"docs/readme.md:12\")\n", []string{a}},
+		{"query-source-json-is-not-another-payload", "1. internal/a/a.go:6 Foo\n{\"results\":[{\"file_path\":\"docs/readme.md\"}]}\n", []string{a}},
 		{"query-agent-hits", "Index: cache-miss (143ms) | Query: 69ms | Preselect: 81ms | Total: 295ms\n" +
 			"Coverage: degraded (2 languages/3 files; 1 warning; 2 partial failures)\n" +
 			"- warning W_WORKTREE_SNAPSHOT\n- partial E_MINIFIED: web/app.min.js\n" +
