@@ -594,7 +594,8 @@ func readSubclass(locate, read timelineEntry, edited []string) string {
 // that starts at its DELIVERY — calls issued before the result arrived (a parallel batch, or calls
 // made while it was outstanding) are not reactions to it. claimed keeps the SPAN sub-buckets
 // exclusive: a read already span-attributed to a later-delivered result makes this one a SHARED
-// READ. It must not be skipped: two parallel answers naming the same file and one read of it are
+// READ. The class describes the first matching follow-up event, not every read
+// in the window; a later unclaimed read cannot replace that event. It must not be skipped: two parallel answers naming the same file and one read of it are
 // two answers the agent followed up, and skipping the read let the second one run out its window
 // and be credited as NO FOLLOW-UP.
 func classifyFollowUp(timeline []timelineEntry, index, window int, claimed map[int]bool) string {

@@ -817,3 +817,23 @@ func TestFollowUpDeliveredTrailingBlankLines(t *testing.T) {
 		t.Fatalf("end line beyond the text trusted: %v", got)
 	}
 }
+
+func TestFollowUpClassifiesFirstMatchingReadEvenWhenLaterReadIsUnclaimed(t *testing.T) {
+	t.Parallel()
+	timeline := []timelineEntry{
+		{paths: []string{"a.go"}, deliveredAt: 1},
+		{kind: timelineRead, paths: []string{"a.go"}},
+		{kind: timelineRead, paths: []string{"a.go"}},
+	}
+	claimed := map[int]bool{1: true}
+	if got := classifyFollowUp(timeline, 0, 5, claimed); got != followUpReadShared {
+		t.Fatalf("first read is shared; a later read cannot change this result's class: %s", got)
+	}
+	if claimed[2] {
+		t.Fatal("a result must not claim a later read after its first matching event")
+	}
+	claimed = map[int]bool{2: true}
+	if got := classifyFollowUp(timeline, 0, 5, claimed); got != followUpReadUnknownSpan || !claimed[1] {
+		t.Fatalf("an unclaimed first read must still be attributed normally: %s, %v", got, claimed)
+	}
+}
